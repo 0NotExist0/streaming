@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HLS Video Player Ottimizzato</title>
+    <title>Streaming Player su Vercel</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
     <style>
         :root {
             --bg-color: #0f172a;
             --panel-bg: #1e293b;
-            --primary: #3b82f6;
+            --primary: #8b5cf6;
             --text: #f8fafc;
         }
 
@@ -24,14 +24,42 @@
             align-items: center;
         }
 
-        .player-container {
+        .container {
             background-color: var(--panel-bg);
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
             max-width: 800px;
             width: 100%;
+            margin-bottom: 20px;
         }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            flex: 1;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: white;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover { background-color: #7c3aed; }
 
         video {
             width: 100%;
@@ -40,197 +68,102 @@
             aspect-ratio: 16/9;
         }
 
-        .controls {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-        }
-
-        button {
-            background-color: #334155;
-            color: white;
-            border: 1px solid #475569;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.2s;
-        }
-
-        button:hover {
-            background-color: #475569;
-        }
-
-        button.active-server {
-            background-color: var(--primary);
-            border-color: #60a5fa;
-        }
-
         .status {
             margin-top: 15px;
             font-size: 0.9em;
             color: #94a3b8;
             text-align: center;
-            padding: 10px;
-            border-radius: 6px;
-            background-color: #0f172a;
-        }
-
-        .error-msg {
-            color: #ef4444;
-            font-weight: bold;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
 
-    <div class="player-container">
-        <video id="video-player" controls preload="auto"></video>
+    <div class="container">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Inserisci il tmdb_id di un film (es. 603692)">
+            <button onclick="fetchStream()">Carica Film</button>
+        </div>
         
-        <div class="controls" id="server-controls">
-            </div>
-
-        <div class="status" id="status-text">Inizializzazione player...</div>
+        <video id="video-player" controls preload="auto"></video>
+        <div class="status" id="status-text">In attesa di un ID TMDB...</div>
     </div>
 
     <script>
-        window.video = { id: '237396', filename: '' };
-        window.streams = [
-            {"name":"Server1","active":true,"url":"https:\/\/vixcloud.co\/playlist\/237396?ub=1"},
-            {"name":"Server2","active":false,"url":"https:\/\/vixcloud.co\/playlist\/237396?ab=1"}
-        ];
-        window.masterPlaylist = {
-            params: {
-                'token': '83059bd4e7ce8d27a06d255ea2aceb26',
-                'expires': '1782324217',
-                'asn': '',
-            },
-            url: 'https://vixcloud.co/playlist/237396',
-        }
-        window.canPlayFHD = true;
-        window.thumbnailsUrl = 'https://sc-u6-01.vix-content.net/hls/15/6/09/609f2357-f786-4145-a94c-9671be47e3af/thumbnails/thumbnails.vtt';
-    </script>
+        const videoElement = document.getElementById('video-player');
+        const statusText = document.getElementById('status-text');
+        let hlsInstance = null;
 
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const videoElement = document.getElementById('video-player');
-            const controlsContainer = document.getElementById('server-controls');
-            const statusText = document.getElementById('status-text');
-            
-            let hlsInstance = null; 
-
-            // Metodo completo per pulire l'istanza precedente senza generare eccezioni DOM
-            function destroyPlayerSafely() {
-                if (hlsInstance) {
-                    // Ferma il download prima di distruggere per evitare il DOMException abort
-                    hlsInstance.stopLoad();
-                    hlsInstance.detachMedia();
-                    hlsInstance.destroy();
-                    hlsInstance = null;
-                }
-                
-                // Pulisci l'elemento video
-                videoElement.pause();
-                videoElement.removeAttribute('src');
-                videoElement.load();
-            }
-
-            // Metodo completo per caricare e riprodurre lo stream
-            function loadStream(streamUrl, serverName) {
-                const token = window.masterPlaylist.params.token;
-                const expires = window.masterPlaylist.params.expires;
-                const finalUrl = `${streamUrl}&token=${token}&expires=${expires}`;
-
-                statusText.innerHTML = `Tentativo di connessione a <strong>${serverName}</strong>...`;
-                statusText.className = 'status';
-
-                // Distruggi la vecchia istanza in modo sicuro
-                destroyPlayerSafely();
-
-                if (Hls.isSupported()) {
-                    hlsInstance = new Hls({
-                        // Configurazione ottimizzata per evitare timeout su server lenti
-                        maxLoadingDelay: 4,
-                        minAutoBitrate: 0,
-                    });
-                    
-                    hlsInstance.loadSource(finalUrl);
-                    hlsInstance.attachMedia(videoElement);
-
-                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-                        statusText.innerHTML = `In riproduzione da <strong>${serverName}</strong>.`;
-                        
-                        // Gestione corretta della Promise del play() per evitare eccezioni
-                        const playPromise = videoElement.play();
-                        if (playPromise !== undefined) {
-                            playPromise.catch(error => {
-                                console.warn("L'autoplay è stato bloccato dal browser. L'utente deve cliccare su Play.", error);
-                            });
-                        }
-                    });
-
-                    // Gestione degli errori strutturata
-                    hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-                        if (data.fatal) {
-                            switch (data.type) {
-                                case Hls.ErrorTypes.NETWORK_ERROR:
-                                    // Spesso indica un blocco CORS o token scaduto
-                                    statusText.innerHTML = `<span class="error-msg">Errore di rete su ${serverName}. Possibile blocco CORS o token invalido.</span>`;
-                                    hlsInstance.destroy();
-                                    break;
-                                case Hls.ErrorTypes.MEDIA_ERROR:
-                                    statusText.innerHTML = `Errore media su ${serverName}. Tento il ripristino...`;
-                                    hlsInstance.recoverMediaError();
-                                    break;
-                                default:
-                                    statusText.innerHTML = `<span class="error-msg">Errore irrecuperabile su ${serverName}.</span>`;
-                                    hlsInstance.destroy();
-                                    break;
-                            }
-                        }
-                    });
-
-                } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-                    // Fallback per Safari
-                    videoElement.src = finalUrl;
-                    videoElement.addEventListener('loadedmetadata', () => {
-                        statusText.innerHTML = `In riproduzione da <strong>${serverName}</strong> (Nativo).`;
-                        videoElement.play().catch(e => console.warn(e));
-                    });
-                    
-                    videoElement.addEventListener('error', () => {
-                         statusText.innerHTML = `<span class="error-msg">Errore di caricamento nativo su ${serverName}. Possibile blocco CORS.</span>`;
-                    });
-                } else {
-                    statusText.innerHTML = "<span class='error-msg'>Il tuo browser non supporta lo standard HLS.</span>";
-                }
-            }
-
-            // Metodo completo per inizializzare l'interfaccia utente
-            function setupUI() {
-                window.streams.forEach(stream => {
-                    const btn = document.createElement('button');
-                    btn.innerText = stream.name;
-                    
-                    if (stream.active) {
-                        btn.classList.add('active-server');
-                        loadStream(stream.url, stream.name);
+        class CORSProxyLoader extends Hls.DefaultConfig.loader {
+            constructor(config) {
+                super(config);
+                const originalLoad = this.load.bind(this);
+                this.load = function (context, config, callbacks) {
+                    if (context.url.startsWith('http')) {
+                        context.url = 'https://corsproxy.io/?' + encodeURIComponent(context.url);
                     }
+                    originalLoad(context, config, callbacks);
+                };
+            }
+        }
 
-                    btn.addEventListener('click', () => {
-                        document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active-server'));
-                        btn.classList.add('active-server');
-                        loadStream(stream.url, stream.name);
-                    });
+        async function fetchStream() {
+            const tmdbId = document.getElementById('searchInput').value;
+            if (!tmdbId) return;
 
-                    controlsContainer.appendChild(btn);
-                });
+            statusText.innerText = "Interrogazione della Serverless Function Python...";
+            
+            try {
+                // Modifica Cruciale: Percorso Relativo per l'API Vercel
+                const response = await fetch(`/api/get_stream?tmdb_id=${tmdbId}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    statusText.innerText = `Errore API: ${data.error}`;
+                    return;
+                }
+
+                if (data.m3u8_url) {
+                    playVideo(data.m3u8_url);
+                }
+
+            } catch (error) {
+                statusText.innerText = "Errore di rete. Impossibile contattare l'API Vercel.";
+            }
+        }
+
+        function playVideo(m3u8Url) {
+            statusText.innerText = `Avvio stream tramite bypass CORS...`;
+
+            if (hlsInstance) {
+                hlsInstance.destroy();
             }
 
-            // Avvio dello script
-            setupUI();
-        });
+            if (Hls.isSupported()) {
+                hlsInstance = new Hls({
+                    pLoader: CORSProxyLoader,
+                    fLoader: CORSProxyLoader
+                });
+                
+                hlsInstance.loadSource(m3u8Url);
+                hlsInstance.attachMedia(videoElement);
+
+                hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                    statusText.innerText = `In riproduzione (Vercel Serverless -> Proxy -> HTML)`;
+                    videoElement.play().catch(() => console.warn("Premere play per avviare"));
+                });
+
+                hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        statusText.innerText = `Errore fatale del video. Proxy intesato o token scaduto.`;
+                        hlsInstance.destroy();
+                    }
+                });
+            } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+                videoElement.src = m3u8Url;
+                videoElement.play();
+            }
+        }
     </script>
 </body>
 </html>
