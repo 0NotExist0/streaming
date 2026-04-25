@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Streaming Player su Vercel</title>
+    <title>Streaming Automatico Avanzato</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
     <style>
         :root {
@@ -42,21 +42,24 @@
 
         input {
             flex: 1;
-            padding: 10px;
+            padding: 12px;
             border-radius: 6px;
             border: 1px solid #475569;
             background: #0f172a;
             color: white;
+            font-size: 1em;
         }
 
         button {
             background-color: var(--primary);
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 1em;
+            transition: background 0.2s;
         }
 
         button:hover { background-color: #7c3aed; }
@@ -74,19 +77,25 @@
             color: #94a3b8;
             text-align: center;
             font-family: monospace;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
         }
+
+        .error-text { color: #ef4444; }
+        .success-text { color: #10b981; }
     </style>
 </head>
 <body>
 
     <div class="container">
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Inserisci il tmdb_id di un film (es. 603692)">
-            <button onclick="fetchStream()">Carica Film</button>
+            <input type="text" id="searchInput" placeholder="Cerca un film (es. John Wick 4)">
+            <button onclick="processStream()">Cerca e Riproduci</button>
         </div>
         
         <video id="video-player" controls preload="auto"></video>
-        <div class="status" id="status-text">In attesa di un ID TMDB...</div>
+        <div class="status" id="status-text">In attesa di un comando...</div>
     </div>
 
     <script>
@@ -107,33 +116,46 @@
             }
         }
 
-        async function fetchStream() {
-            const tmdbId = document.getElementById('searchInput').value;
-            if (!tmdbId) return;
+        async function processStream() {
+            const movieQuery = document.getElementById('searchInput').value;
+            if (!movieQuery) return;
 
-            statusText.innerText = "Interrogazione della Serverless Function Python...";
+            // FASE 1: Ricerca testuale
+            statusText.innerText = `Ricerca di "${movieQuery}" in corso...`;
+            statusText.className = 'status';
             
             try {
-                // Modifica Cruciale: Percorso Relativo per l'API Vercel
-                const response = await fetch(`/api/get_stream?tmdb_id=${tmdbId}`);
-                const data = await response.json();
+                const searchRes = await fetch(`/api/search?q=${encodeURIComponent(movieQuery)}`);
+                const searchData = await searchRes.json();
 
-                if (data.error) {
-                    statusText.innerText = `Errore API: ${data.error}`;
+                if (searchData.error || !searchData.length) {
+                    statusText.innerHTML = `<span class="error-text">Film non trovato o errore server.</span>`;
                     return;
                 }
 
-                if (data.m3u8_url) {
-                    playVideo(data.m3u8_url);
+                const movie = searchData[0]; // Prendiamo il primo risultato
+                statusText.innerText = `Trovato: ${movie.name}. Estrazione del video in corso...`;
+
+                // FASE 2: Richiesta estrazione flussi a Python
+                const streamRes = await fetch(`/api/get_stream?sc_id=${movie.id}`);
+                const streamData = await streamRes.json();
+
+                if (streamData.error) {
+                    statusText.innerHTML = `<span class="error-text">Errore Estrazione: ${streamData.error}</span>`;
+                    return;
+                }
+
+                if (streamData.m3u8_url) {
+                    playVideo(streamData.m3u8_url);
                 }
 
             } catch (error) {
-                statusText.innerText = "Errore di rete. Impossibile contattare l'API Vercel.";
+                statusText.innerHTML = `<span class="error-text">Errore di comunicazione con le API di Vercel.</span>`;
             }
         }
 
         function playVideo(m3u8Url) {
-            statusText.innerText = `Avvio stream tramite bypass CORS...`;
+            statusText.innerText = `Inizializzazione proxy per bypass CORS...`;
 
             if (hlsInstance) {
                 hlsInstance.destroy();
@@ -149,13 +171,13 @@
                 hlsInstance.attachMedia(videoElement);
 
                 hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-                    statusText.innerText = `In riproduzione (Vercel Serverless -> Proxy -> HTML)`;
-                    videoElement.play().catch(() => console.warn("Premere play per avviare"));
+                    statusText.innerHTML = `<span class="success-text">Riproduzione avviata con successo!</span>`;
+                    videoElement.play().catch(() => console.warn("L'utente deve premere play manualmente"));
                 });
 
                 hlsInstance.on(Hls.Events.ERROR, (event, data) => {
                     if (data.fatal) {
-                        statusText.innerText = `Errore fatale del video. Proxy intesato o token scaduto.`;
+                        statusText.innerHTML = `<span class="error-text">Errore fatale del video. Proxy intasato o blocco attivo.</span>`;
                         hlsInstance.destroy();
                     }
                 });
