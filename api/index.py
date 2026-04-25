@@ -6,7 +6,7 @@ app = Flask(__name__)
 # Abilitiamo CORS in caso tu voglia testare in locale con server separati
 CORS(app) 
 
-DOMINIO_SC = 'streamingcommunity.cz'
+DOMINIO_SC = 'streamingcommunityz.ooo'
 DOMINIO_VIX = 'vixcloud.co'
 sc = API(DOMINIO_SC)
 
