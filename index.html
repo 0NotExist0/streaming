@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizzatore Dati Streaming</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            max-width: 800px;
+            width: 100%;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .info-card {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .info-card strong {
+            display: block;
+            font-size: 0.9em;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .server-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .server-btn {
+            background-color: white;
+            border: 1px solid #cbd5e1;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1em;
+            transition: all 0.2s;
+        }
+
+        .server-btn:hover {
+            border-color: var(--primary-color);
+            background-color: #eff6ff;
+        }
+
+        .server-btn.active {
+            border-color: #22c55e;
+            background-color: #f0fdf4;
+        }
+
+        .badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .badge.active-badge {
+            background: #22c55e;
+            color: white;
+        }
+
+        #output-console {
+            margin-top: 30px;
+            background: #1e293b;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Dettagli Flusso Video</h1>
+        
+        <div class="info-grid" id="video-metadata">
+            </div>
+
+        <h2>Server Disponibili</h2>
+        <div class="server-list" id="server-container">
+            </div>
+
+        <div id="output-console"></div>
+    </div>
+
+    <script>
+        window.video = {
+            id: '237396',
+            filename: '',
+        };
+        window.streams = [
+            {"name":"Server1","active":true,"url":"https:\/\/vixcloud.co\/playlist\/237396?ub=1"},
+            {"name":"Server2","active":false,"url":"https:\/\/vixcloud.co\/playlist\/237396?ab=1"}
+        ];
+        window.masterPlaylist = {
+            params: {
+                'token': '83059bd4e7ce8d27a06d255ea2aceb26',
+                'expires': '1782324217',
+                'asn': '',
+            },
+            url: 'https://vixcloud.co/playlist/237396',
+        }
+        window.canPlayFHD = true
+        window.thumbnailsUrl = 'https://sc-u6-01.vix-content.net/hls/15/6/09/609f2357-f786-4145-a94c-9671be47e3af/thumbnails/thumbnails.vtt'
+    </script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            
+            // Metodo completo per inizializzare l'interfaccia
+            function initInterface() {
+                renderMetadata();
+                renderServers();
+            }
+
+            // Metodo per formattare la data di scadenza del token (da UNIX timestamp a data leggibile)
+            function formatExpirationDate(unixTimestamp) {
+                const date = new Date(unixTimestamp * 1000);
+                return date.toLocaleString('it-IT');
+            }
+
+            // Metodo per popolare le schede con le informazioni generali
+            function renderMetadata() {
+                const metadataContainer = document.getElementById('video-metadata');
+                
+                const expiresDate = formatExpirationDate(window.masterPlaylist.params.expires);
+                const fhdStatus = window.canPlayFHD ? 'Supportato' : 'Non Supportato';
+
+                metadataContainer.innerHTML = `
+                    <div class="info-card">
+                        <strong>ID Video</strong>
+                        <span>${window.video.id}</span>
+                    </div>
+                    <div class="info-card">
+                        <strong>Risoluzione FHD</strong>
+                        <span>${fhdStatus}</span>
+                    </div>
+                    <div class="info-card">
+                        <strong>Scadenza Token</strong>
+                        <span>${expiresDate}</span>
+                    </div>
+                `;
+            }
+
+            // Metodo per generare la lista interattiva dei server
+            function renderServers() {
+                const serverContainer = document.getElementById('server-container');
+                const consoleOutput = document.getElementById('output-console');
+
+                window.streams.forEach(stream => {
+                    const button = document.createElement('button');
+                    button.className = `server-btn ${stream.active ? 'active' : ''}`;
+                    
+                    const statusBadge = stream.active 
+                        ? `<span class="badge active-badge">Consigliato</span>` 
+                        : `<span class="badge">Backup</span>`;
+
+                    button.innerHTML = `
+                        <span><strong>${stream.name}</strong></span>
+                        ${statusBadge}
+                    `;
+
+                    // Evento click completo: costruisce l'URL di streaming finale unendo l'URL del server ai parametri della masterPlaylist
+                    button.addEventListener('click', () => {
+                        const token = window.masterPlaylist.params.token;
+                        const expires = window.masterPlaylist.params.expires;
+                        
+                        // Costruzione dell'URL finale per il player
+                        const finalUrl = `${stream.url}&token=${token}&expires=${expires}`;
+                        
+                        consoleOutput.style.display = 'block';
+                        consoleOutput.innerHTML = `// Connessione al server avviata...\n\nURL GENERATO PER IL PLAYER:\n${finalUrl}\n\nURL THUMBNAIL:\n${window.thumbnailsUrl}`;
+                    });
+
+                    serverContainer.appendChild(button);
+                });
+            }
+
+            // Avvia la costruzione dell'interfaccia
+            initInterface();
+        });
+    </script>
+</body>
+</html>
